@@ -7,14 +7,10 @@ from aws_cdk import (
     RemovalPolicy,
     aws_iam as iam,
     aws_ec2 as ec2,
-    aws_autoscaling as asc,
-    aws_ssm as ssm,
     aws_amazonmq as amq,
     aws_secretsmanager as sm,
     aws_s3 as s3,
-    aws_logs as logs,
-    aws_codecommit as cc,
-)
+    aws_logs as logs)
 import json
 from botocore.exceptions import ClientError
 import boto3
@@ -52,19 +48,16 @@ class VolumeModel(BaseModel):
 class WorkersModel(BaseModel):
     instance_type: str
     ami: AmiModel
-    launch_template_parameter: Optional[str] = None
-    max_capacity: int = Field(default=1)
-    min_capacity: int = Field(default=1)
     user_data: Optional[List[str]]
     volumes: List[VolumeModel]
     
 class Workers(Construct):
     def __init__(self, scope: Construct, id: str, 
-                 env_name: str, 
-                 project_name: str,
-                 config: WorkersModel,
-                 vpc: ec2.Vpc,
-                 artifact: s3.Bucket):
+                env_name: str,
+                project_name: str,
+                config: WorkersModel,
+                vpc: ec2.Vpc,
+                artifact: s3.Bucket):
         super().__init__(scope, id)
         
         # Just allocate an IP for workers to access internet through NAT
@@ -130,30 +123,18 @@ class Workers(Construct):
                     volume=ec2.BlockDeviceVolume.ebs(volume.size)))
         
         machine_image = ec2.MachineImage.generic_windows({region: ami_id})
- 
-        self.launch_template = ec2.LaunchTemplate(self, 'LaunchTemplate',
-            launch_template_name=f'{project_name}-{env_name}-workbench',
-            associate_public_ip_address=False,
-            block_devices=block_devices,
-            http_tokens=ec2.LaunchTemplateHttpTokens.REQUIRED,
+        
+        self.instance = ec2.Instance(self, 'Instance',
+            instance_name=f'{project_name}-{env_name}-worker',
             instance_type=ec2.InstanceType(config.instance_type),
             machine_image=machine_image,
-            require_imdsv2=True,
+            block_devices=block_devices,
             role=self.role,
             security_group=self.sg,
-            user_data=ec2.UserData.for_windows(persist=True))
-        
-        if (config.launch_template_parameter):
-            ssm.StringParameter(self, "LaunchTemplateID",
-                parameter_name=config.launch_template_parameter,
-                string_value=self.launch_template.launch_template_id)
-                
-        self.asc = asc.AutoScalingGroup(self,"ASG",
             vpc=vpc,
-            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-            min_capacity=config.min_capacity,
-            max_capacity=config.max_capacity,
-            launch_template=self.launch_template)
+            vpc_subnets=ec2.SubnetSelection(
+                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
+            user_data=ec2.UserData.for_windows(persist=True))
 
         secret_name = f'/{project_name}-{env_name}/broker_credentials'
         self.secret = sm.Secret(self, "Secret",
@@ -182,6 +163,7 @@ class Workers(Construct):
             users=[amq.CfnBroker.UserProperty(
                 username=self.secret.secret_value_from_json("username").unsafe_unwrap(),
                 password=self.secret.secret_value_from_json("password").unsafe_unwrap())])
+        self.broker.apply_removal_policy(RemovalPolicy.DESTROY)
         
         # Access to RabbitMQ and its management UI
         self.sg.add_ingress_rule(
@@ -191,26 +173,32 @@ class Workers(Construct):
             peer=ec2.Peer.any_ipv4(), 
             connection=ec2.Port.tcp(443))
         
+        account_id = Stack.of(self).account
         region = Stack.of(self).region
-        self.launch_template.user_data.add_commands(
+        source_bucket_name = f'{project_name}-{env_name}-sourcecode-{account_id}-{region}'
+        self.instance.user_data.add_commands(
             f"[System.Environment]::SetEnvironmentVariable('WORKER_QUEUE_BROKER_NAME', '{broker_name}', 'Machine')")
-        self.launch_template.user_data.add_commands(
+        self.instance.user_data.add_commands(
             f"[System.Environment]::SetEnvironmentVariable('WORKER_QUEUE_SECRET_NAME', '{self.secret.secret_name}', 'Machine')")
-        self.launch_template.user_data.add_commands(
+        self.instance.user_data.add_commands(
             f"[System.Environment]::SetEnvironmentVariable('WORKER_QUEUE_SECRET_REGION', '{region}', 'Machine')")
-        self.launch_template.user_data.add_commands(
+        self.instance.user_data.add_commands(
             f"[System.Environment]::SetEnvironmentVariable('WORKER_LOG_GROUP_NAME', '{log_group_name}', 'Machine')")
-        self.launch_template.user_data.add_commands(
+        self.instance.user_data.add_commands(
             f"[Environment]::SetEnvironmentVariable('AWS_DEFAULT_REGION', '{region}', 'Machine')")
-        self.launch_template.user_data.add_commands(
+        self.instance.user_data.add_commands(
             f"[Environment]::SetEnvironmentVariable('AWS_DEFAULT_REGION', '{region}')")
-        self.launch_template.user_data.add_commands(
+        self.instance.user_data.add_commands(
             f"[Environment]::SetEnvironmentVariable('ARTIFACT_BUCKET_NAME', '{artifact.bucket_name}', 'Machine')")
-        self.launch_template.user_data.add_commands(
+        self.instance.user_data.add_commands(
             f"[Environment]::SetEnvironmentVariable('ARTIFACT_BUCKET_NAME', '{artifact.bucket_name}')")
+        self.instance.user_data.add_commands(
+            f"[Environment]::SetEnvironmentVariable('SOURCE_BUCKET_NAME', '{source_bucket_name}', 'Machine')")
+        self.instance.user_data.add_commands(
+            f"[Environment]::SetEnvironmentVariable('SOURCE_BUCKET_NAME', '{source_bucket_name}')")
 
         for cmd in config.user_data:
-            self.launch_template.user_data.add_commands(cmd)
+            self.instance.user_data.add_commands(cmd)
             
         # Workers access Internet with this NAT gateway
         nat_gateway = ec2.CfnNatGateway(self, 'NATGateway', 
@@ -222,4 +210,3 @@ class Workers(Construct):
                 route_table_id=subnet.route_table.route_table_id,
                 destination_cidr_block='0.0.0.0/0',
                 nat_gateway_id=nat_gateway.ref) 
-

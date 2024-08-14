@@ -7,7 +7,6 @@ from aws_cdk import (
     aws_iam as iam,
     aws_ec2 as ec2,
     aws_s3 as s3)
-import json
 from botocore.exceptions import ClientError
 import boto3
 
@@ -102,14 +101,17 @@ class Workbench(Construct):
             instance_name=f'{project_name}-{env_name}-workbench',
             instance_type=ec2.InstanceType(config.instance_type),
             machine_image=machine_image,
+            block_devices=block_devices,
             role=self.role,
             security_group=self.sg,
             vpc=vpc,
             vpc_subnets=ec2.SubnetSelection(
                 subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-            user_data=ec2.UserData.for_windows(persist=False))
+            user_data=ec2.UserData.for_windows(persist=True))
 
+        account_id = Stack.of(self).account
         region = Stack.of(self).region
+        source_bucket_name = f'{project_name}-{env_name}-sourcecode-{account_id}-{region}'
         self.instance.user_data.add_commands(
             f"[Environment]::SetEnvironmentVariable('AWS_DEFAULT_REGION', '{region}', 'Machine')")
         self.instance.user_data.add_commands(
@@ -118,6 +120,10 @@ class Workbench(Construct):
             f"[Environment]::SetEnvironmentVariable('ARTIFACT_BUCKET_NAME', '{artifact.bucket_name}', 'Machine')")
         self.instance.user_data.add_commands(
             f"[Environment]::SetEnvironmentVariable('ARTIFACT_BUCKET_NAME', '{artifact.bucket_name}')")
+        self.instance.user_data.add_commands(
+            f"[Environment]::SetEnvironmentVariable('SOURCE_BUCKET_NAME', '{source_bucket_name}', 'Machine')")
+        self.instance.user_data.add_commands(
+            f"[Environment]::SetEnvironmentVariable('SOURCE_BUCKET_NAME', '{source_bucket_name}')")
         
         for cmd in config.user_data:
             self.instance.user_data.add_commands(cmd)
