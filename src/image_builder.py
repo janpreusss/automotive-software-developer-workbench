@@ -9,7 +9,6 @@ from aws_cdk import (
     Stack,
     aws_iam as iam,
     aws_imagebuilder as imagebuilder,
-    aws_ssm as ssm,
 )
 from cdk_ec2_key_pair import KeyPair
 from botocore.exceptions import ClientError
@@ -67,9 +66,9 @@ class AmiModel(BaseModel):
 
 class ImageBuilder(Construct):
     def __init__(self, scope: Construct, id: str, 
-                 env_name: str, 
-                 project_name: str,
-                 instance_types: List[str]):
+                env_name: str, 
+                project_name: str,
+                instance_types: List[str]):
         super().__init__(scope, id)
         
         self._components = []
@@ -98,16 +97,16 @@ class ImageBuilder(Construct):
             roles = [ self.role.role_name ])
         
         key = KeyPair(self, "KeyPair",
-            name=name,
+            key_pair_name=name,
             store_public_key=True)
         
         #TBD: include specific VPC configuration, because run will fail if no default VPC
         configuration  = imagebuilder.CfnInfrastructureConfiguration(self, 'Configuration', 
-              name = f'{project_name}-{env_name}',
-              instance_types = instance_types,
-              instance_profile_name = name,
-              key_pair = key.key_pair_name,
-              terminate_instance_on_failure = False)
+            name = f'{project_name}-{env_name}',
+            instance_types = instance_types,
+            instance_profile_name = name,
+            key_pair = key.key_pair_name,
+            terminate_instance_on_failure = False)
         self.attr_arn = configuration.attr_arn
         
         configuration.add_dependency(instance_profile)
@@ -187,6 +186,3 @@ class ImageBuilder(Construct):
                 self, 'DistributionConfiguration',
                 name=ami.name,
                 distributions=distributions).attr_arn))
-
-   
-

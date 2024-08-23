@@ -26,21 +26,23 @@ if app.node.try_get_context('config') != None:
         
         env_dev = Environment(account=config.dev.account, region=config.dev.region)
 
+        env_name = 'dev'
         if config.infra_repository_name:
             PipelineStack(app, "{}-pipeline".format(config.project_name),
+                env_name,
                 config,
                 env=env_dev)
         
         if config.dev.ami_factory: 
             AmiFactoryStack(app, "{}-dev-ami-factory".format(config.project_name),
-                'dev',
+                env_name,
                 config.project_name,
                 config.dev.ami_factory,
                 env=env_dev)
         
         if config.dev.software_factory: 
             SoftwareFactoryStack(app, "{}-dev-software-factory".format(config.project_name),
-                'dev',
+                env_name,
                 config.project_name,
                 config.dev.software_factory,
                 env=env_dev)

@@ -1,25 +1,20 @@
-import os
 from constructs import Construct
 from aws_cdk import (
     Stack,
     CfnOutput,
     RemovalPolicy,
-    aws_codecommit as cc,
     aws_codebuild as cb,
     aws_codepipeline as cp,
     aws_codepipeline_actions as cp_actions,
     aws_iam as iam,
     aws_s3 as s3,
-    aws_ec2 as ec2
+    aws_ec2 as ec2,
+    aws_cloudtrail as ct
 )
 from pydantic import BaseModel
 from typing import Optional, List
 from src.workers import Workers, WorkersModel
 from src.workbench import Workbench, WorkbenchModel
-
-class RepositoryModel(BaseModel):
-    name: str
-    code: Optional[str] = None
 
 class VpcModel(BaseModel):
     ip_addresses: str = "10.1.0.0/16"
@@ -35,9 +30,16 @@ class StageModel(BaseModel):
 class Artifacts(BaseModel):
     retain: bool = True
 
+class Sourcecode(BaseModel):
+    retain: bool = True
+
+class Cloudtrail(BaseModel):
+    retain: bool = True
+
 class SoftwareFactoryModel(BaseModel):
     artifacts: Optional[Artifacts] = Artifacts()
-    repository: RepositoryModel
+    sourcecode: Optional[Sourcecode] = Sourcecode()
+    cloudtrail: Optional[Cloudtrail] = Cloudtrail()
     vpc: Optional[VpcModel] = VpcModel()
     workers: Optional[WorkersModel] = None
     stages: Optional[List[StageModel]] = None
@@ -56,20 +58,26 @@ class SoftwareFactoryStack(Stack):
                 
     CfnOutput(self, "Account ID", value=account_id, description='Account ID')
 
-    kwargs = { 'repository_name': config.repository.name }
-    if config.repository.code:
-        kwargs['code'] = cc.Code.from_directory(directory_path = os.path.join(
-            os.path.dirname(__file__), 
-            os.path.join('..', config.repository.code)))
-    
-    self.repository = cc.Repository(self, 'Repository', **kwargs)
-    
     kwargs = { 'bucket_name': f'{project_name}-{env_name}-{account_id}-{region}' }
     if not config.artifacts.retain:
         kwargs['removal_policy'] = RemovalPolicy.DESTROY
         kwargs['auto_delete_objects'] = True
         
     self.artifact = s3.Bucket(self, 'ArtifactBucket', **kwargs)
+
+    kwargs = { 'bucket_name': f'{project_name}-{env_name}-sourcecode-{account_id}-{region}', 'versioned': True}
+    if not config.sourcecode.retain:
+        kwargs['removal_policy'] = RemovalPolicy.DESTROY
+        kwargs['auto_delete_objects'] = True
+
+    self.source_code = s3.Bucket(self, 'SourceCodeBucket', **kwargs)
+    
+    kwargs = { 'bucket_name': f'{project_name}-{env_name}-cloudtrail-{account_id}-{region}'}
+    if not config.cloudtrail.retain:
+        kwargs['removal_policy'] = RemovalPolicy.DESTROY
+        kwargs['auto_delete_objects'] = True
+
+    self.cloudtrail = s3.Bucket(self, 'LogBucket', **kwargs)
     
     self.vpc = ec2.Vpc(self, 'VPC',
         ip_addresses = ec2.IpAddresses.cidr(config.vpc.ip_addresses),
@@ -96,10 +104,6 @@ class SoftwareFactoryStack(Stack):
         service=ec2.InterfaceVpcEndpointAwsService.SSM,
         subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS))
 
-    self.vpc.add_interface_endpoint("CC",
-        service=ec2.InterfaceVpcEndpointAwsService.CODECOMMIT_GIT ,
-        subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS))
-    
     self.vpc.add_interface_endpoint("CW",
         service=ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS ,
         subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS))
@@ -107,6 +111,7 @@ class SoftwareFactoryStack(Stack):
     cb_role = iam.Role(self, 'CodeBuildRole', 
         assumed_by=iam.ServicePrincipal('codebuild.amazonaws.com'))
     self.artifact.grant_read_write(cb_role)
+    self.source_code.grant_read_write(cb_role)
 
     if config.workers:
         workers = Workers(self, 'Workers', 
@@ -120,24 +125,31 @@ class SoftwareFactoryStack(Stack):
                     actions=['mq:ListBrokers'],
                     resources=['*']))
             workers.secret.grant_read(cb_role)
-            self.repository.grant_pull_push(workers.role)
+            self.source_code.grant_read_write(workers.role)
 
     pipeline = cp.Pipeline(self, 'Pipeline', 
         pipeline_name=f'{project_name}-{env_name}',
         cross_account_keys=False,
         artifact_bucket=self.artifact)
-    
-    pipeline.artifact_bucket
-    
+        
     source_stage = pipeline.add_stage(stage_name='Source')
     source_artifact = cp.Artifact()
+    key = 'working-dir.zip'
 
-    source_stage.add_action(cp_actions.CodeCommitSourceAction(
-        action_name='Source',
+    trail = ct.Trail(self, "CloudTrail", bucket=self.cloudtrail)
+    trail.add_s3_event_selector([ct.S3EventSelector(
+        bucket=self.source_code,
+        object_prefix=key
+    )],
+        read_write_type=ct.ReadWriteType.WRITE_ONLY
+    )
+    source_stage.add_action(cp_actions.S3SourceAction(
+        action_name='S3Source',
         output=source_artifact,
-        repository=self.repository,
-        branch='main'))
-        
+        bucket=self.source_code,
+        bucket_key=key,
+        trigger=cp_actions.S3Trigger.EVENTS))
+
     for stage in config.stages:
         actions = []
         for action in stage.actions:
@@ -148,6 +160,8 @@ class SoftwareFactoryStack(Stack):
                     build_image=cb.LinuxBuildImage.AMAZON_LINUX_2_5),
                 'build_spec': cb.BuildSpec.from_source_filename(f'.cb/{action.buildspec}'),
                 'environment_variables': {
+                    'SOURCE_CODE_BUCKET_NAME': cb.BuildEnvironmentVariable(
+                        value=f'{self.source_code.bucket_name}'),
                     'ARTIFACT_BUCKET_NAME': cb.BuildEnvironmentVariable(
                         value=f'{self.artifact.bucket_name}'),
                     'WORKER_QUEUE_SECRET_REGION': cb.BuildEnvironmentVariable(
@@ -180,10 +194,4 @@ class SoftwareFactoryStack(Stack):
             vpc=self.vpc,
             artifact=self.artifact)
         wb.node.add_dependency(workers)
-        self.repository.grant_pull_push(wb.role)
-        
-                
-
-            
-    
-    
+        self.source_code.grant_read_write(wb.role)
