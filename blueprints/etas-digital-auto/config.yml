@@ -1,0 +1,153 @@
+project_name: digital-auto-1
+dev:
+  software_factory:
+    artifacts:
+      retain: false
+    sourcecode:
+      retain: false
+    cloudtrail:
+      retain: false
+    vpc:
+      ip_addresses: 10.1.0.0/16
+    workbench:
+      instance_type: m6i.large
+      ami:
+        ami_ids:
+          eu_central_1: ami-09cf5e00bb63ed741
+          us_east_1: ami-0fdaa9be8cfc23ac8
+          ap_southeast_1: ami-02b9c4a08521412e7
+      volumes:
+        - size: 200
+          device_name: /dev/sda1
+      user_data:
+        - |-
+          Set-ExecutionPolicy -ExecutionPolicy Unrestricted
+          net user Administrator "Etas2024@" /active:Yes
+          [Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable('Path', "Machine") + ";c:\App_Installers\tools\rclone-v1.64.2-windows-amd64", "Machine")
+          aws configure set default.region $env:AWS_DEFAULT_REGION
+          # Setup the working directory and initialize the ascet workspace
+          if(!(Test-Path -Path "C:\demo_etas\working-dir" )) {
+            aws s3 cp s3://$env:SOURCE_BUCKET_NAME/3.0.0/ c:\demo_etas\working-dir --recursive  
+            C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe -nosplash -data C:\demo_etas\working-dir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll C:\demo_etas\src\ascet\main\ -cleanBuild all
+          }
+          # Setup the rclone configuration
+          if(!(Test-Path -Path "C:\Users\Administrator\AppData\Roaming\rclone\rclone.conf" )) {
+          $config = @"
+          [remote]
+          type = s3
+          provider = AWS
+          env_auth = true
+          region = $env:AWS_DEFAULT_REGION
+          location_constraint = $env:AWS_DEFAULT_REGION
+          storage_class = STANDARD
+          "@
+            New-Item -Path "C:\Users\Administrator\AppData\Roaming\" -Name "rclone" -ItemType "directory" -force
+            Set-Content "C:\Users\Administrator\AppData\Roaming\rclone\rclone.conf" $config
+          }
+          # Setup the rclone mount
+          if(!(Test-Path -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\rclone.bat" )) {
+          $script = @"
+          rclone mount remote:/$env:ARTIFACT_BUCKET_NAME C:\Users\Administrator\Desktop\Artifacts --no-console --log-file C:\Users\Administrator\AppData\Roaming\rclone\log.txt --vfs-cache-mode full
+          "@
+            Set-Content "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\rclone.bat" $script
+          }
+          # Setup the sync to s3 script
+          if(!(Test-Path -Path "C:\Users\Administrator\Desktop\sync-to-s3.ps1" )) {
+          $syncaws = @"
+          `$ErrorActionPreference = "Stop"`
+          if(Test-Path -Path "C:\demo_etas\working-dir.zip" ) {
+            rm C:\demo_etas\working-dir.zip
+          }
+          & "C:\Program Files\7-zip\7z" a -tzip C:\demo_etas\working-dir.zip -r C:\demo_etas\working-dir\* -x!ws
+          aws s3 cp C:\demo_etas\working-dir.zip s3://$env:SOURCE_BUCKET_NAME/
+          aws s3 sync C:\demo_etas\working-dir s3://$env:SOURCE_BUCKET_NAME/working-dir --delete --exclude "ws"
+          "@
+            Set-Content "C:\Users\Administrator\Desktop\sync-to-s3.ps1" $syncaws
+            # On the first run, execute the sync script 
+            & "C:\Users\Administrator\Desktop\sync-to-s3.ps1"
+          }
+          # Setup the restore from s3 script
+          if(!(Test-Path -Path "C:\Users\Administrator\Desktop\restore-from-s3.ps1" )) {
+          $restore = @"
+          `$ErrorActionPreference = "Stop"`
+          # Check if the process ascet.exe is running
+          $process = Get-Process -Name "ascet" -ErrorAction SilentlyContinue
+
+          # If the process is found, kill it
+          if ($process) {
+              Stop-Process -Name "ascet" -Force
+              Write-Output "ascet.exe was running and has been terminated."
+          }
+          if(Test-Path -Path "C:\demo_etas\working-dir" ) {
+            rm -r C:\demo_etas\working-dir
+          }
+          aws s3 cp s3://$env:SOURCE_BUCKET_NAME/3.0.0 C:\demo_etas\working-dir --recursive
+          C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe -nosplash -data C:\demo_etas\working-dir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll C:\demo_etas\working-dir\src\ascet\main\ -cleanBuild all
+          "@
+            Set-Content "C:\Users\Administrator\Desktop\restore-from-s3.ps1" $restore
+          }
+    workers:
+      instance_type: m6i.xlarge
+      ami:
+        ami_ids:
+          eu_central_1: ami-09cf5e00bb63ed741
+          us_east_1: ami-0fdaa9be8cfc23ac8
+          ap_southeast_1: ami-02b9c4a08521412e7
+      min_capacity: 1
+      max_capacity: 1
+      volumes:
+        - size: 200
+          device_name: /dev/sda1
+      user_data:
+        - |-
+          Set-ExecutionPolicy -ExecutionPolicy Unrestricted
+          net user Administrator "Etas2024@" /active:Yes
+          aws configure set default.region $env:AWS_DEFAULT_REGION
+          if(!(Test-Path -Path "c:\demo_etas\working-dir\src" )) {
+            Copy-Item -Path C:\App_Installers\tools\ETAS_Tools\aasf-etas-autosar-cp\repo -Destination c:\demo_etas\working-dir -Recurse
+            aws s3 cp c:\demo_etas\working-dir s3://$env:SOURCE_BUCKET_NAME/3.0.0 --recursive
+            aws s3 cp c:\demo_etas\working-dir s3://$env:SOURCE_BUCKET_NAME/working-dir --recursive
+          }
+          cosym --start --mode=headless --acknowledgement=yes
+          if(!(Test-Path -Path "C:\checkworker.ps1" )) {
+            $workerhome="C:\App_Installers\tools\ETAS_Tools\aasf-etas-autosar-cp\worker"
+            python -m venv "$workerhome\.venv"
+            & "$workerhome\.venv\Scripts\pip.exe" install -r "$workerhome\requirements.txt"
+          $script = @"
+          if (-not (Get-Process -Name python -ErrorAction SilentlyContinue)) {
+            `$workerhome="$workerhome"
+            `$python="`$workerhome\.venv\Scripts\python.exe"
+            `$worker="`$workerhome\worker.py"
+            Start-Process -filepath `$python -ArgumentList `$worker -Verb RunAs -WindowStyle Hidden
+            get-date | Add-Content c:\checkworker.log
+          }
+          "@
+            Set-Content "C:\checkworker.ps1" $script
+            $action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "C:\checkworker.ps1"
+            $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
+            $settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel
+            Register-ScheduledTask -TaskName "CheckWorker" -Action $action -Trigger $trigger -Settings $settings -User Administrator -Password "Etas2024@"
+          }
+    stages:
+      - name: CodeGeneration
+        actions:
+          - name: ASWCodeGeneration
+            buildspec: asw-codegeneration.yml
+          - name: EHBSaas
+            buildspec: ehb-saas.yml
+      - name: vECUBuild
+        actions:
+          - name: vECUBuild
+            buildspec: vecu-build.yml
+      - name: COSYMBuild
+        actions:
+          - name: COSYMBuild
+            buildspec: cosym-build.yml
+      - name: Validate
+        actions:
+          - name: ValidateFMU
+            buildspec: fmu-validate.yml
+      - name: PushToDigitalAuto
+        actions:
+          - name: PushResults
+            buildspec: push-result.yml

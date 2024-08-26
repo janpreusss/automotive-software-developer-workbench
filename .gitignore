@@ -93,3 +93,4 @@ config.yml
 download-url.*
 .DS_Store
 **/.DS_Store
+.idea
