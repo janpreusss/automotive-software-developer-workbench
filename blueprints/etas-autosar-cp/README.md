@@ -1,8 +1,18 @@
 # Model-based design workflow for AUTOSAR Classic Platform
 
-This demo showcases how to design and test on AWS an in-vehicle application based on AUTOSAR classic platform using a model-based approach. A developer connects to his Workbench, specifically crafted for the project, via a web browser-based client with Remote Desktop Protocol (RDP). The workbench comes will all the tools he needs to design the application, such as ETAS ASCET-DEVELOPER and EHANDBOOK-NAVIGATOR. Before committing to the project repository, he can locally execute the application at model level and verify that all the developed tests do pass. At every code commit, the project pipeline is trigged and a full suite of model-in-the-loop (MiL) tests is executed at scale. If MiL stage passes successfully, C code is generated. This code contains Application Software (ASW) and Basic Software (BSW) including the OS and the RTE. This in turn is fed into ETAS vECU-BUILDER which produces a model of the ECU in FMU format (Type-2 vECU model). At last, the vECU model is bundled with the Plant Model FMU model using ETAS COSYM. Software-in-the-loop (SiL) tests are then executed at scale with ETAS MODEL SIMULATOR, with test specifications designed with TraceTronic ECU-TEST. MiL-tests and SiL-tests reports are exposed to the workbench, where the developer can analyse them, thus closing the loop. The whole architecture can be configured and deployed via infrastructure-as-code (IaC), based on CDK and Python, and empowers anyone with an AWS account to test this workflow.
+Welcome to our demo showcasing how to design and test an in-vehicle application on AWS using a model-based approach. With our specially crafted Workbench, you can easily connect via a web browser-based client and access all the tools you need, including ETAS ASCET-DEVELOPER and ETAS EHANDBOOK-NAVIGATOR. 
 
-This demo aligns AWS' efforts in revolutionizingng automotive software development with ETAS' [Continuous Development Workbench](https://www.etas.com/en/products/continuous-development-workbench.php).
+Before committing your code, you can locally execute and test your application at the model level to ensure everything is working as expected. Once you're ready, our project pipeline will be triggered, running a comprehensive suite of model-in-the-loop (MiL) tests at scale. If the MiL tests pass successfully, C code will be generated, including the Application Software (ASW) and Basic Software (BSW) components. 
+
+Next, the code will be fed into ETAS vECU-BUILDER, which will produce a model of the virtual Electronic Control Unit (vECU) in FMU format. This model, known as a Type-2 vECU model, will then be bundled with the Plant Model FMU using ETAS COSYM. 
+
+To ensure the quality of your software, software-in-the-loop (SiL) tests will be executed at scale using ETAS MODEL SIMULATOR, with test specifications designed with TraceTronic ecu.test. The results of both the MiL and SiL tests will be available for analysis on the Workbench, allowing you to close the loop and make any necessary adjustments. 
+
+Our architecture can be easily configured and deployed using infrastructure-as-code (IaC) based on CDK and Python. This means that anyone with an AWS account can test and benefit from this powerful workflow. 
+
+Join us and experience the future of in-vehicle application development with ETAS on AWS!
+
+This demo aligns AWS' efforts in revolutionizing automotive software development with ETAS' [Continuous Development Workbench](https://www.etas.com/en/products/continuous-development-workbench.php).
 
 ## Architecture
 
@@ -91,9 +101,11 @@ Using the context menu you can execute the scripts with PowerShell.
 
 ## Why do we use S3 for source code management?
 
-The AWS git system **code commit** has been deprecated, requiring setup changes.
-The pipeline has been updated to use an S3 bucket to synchronise the workspace from the workbench to the worker instances. See the architecture diagram for the updated pipeline.
-This was done to keep all project files within the AWS ecosystem and to simplify the setup.
+We have made some exciting updates to our setup to enhance the deployment process and ensure a smoother experience for you. Instead of using the AWS Code Commit git system, we have switched to a more convenient solution - AWS S3. Now, we use an S3 bucket to synchronize the workspace between the workbench and the worker instances. This S3 bucket also acts as a versioning system, making it easy for you to keep track of different versions of your code. These changes have been implemented to simplify the deployment process and make it seamlessly integrated within the AWS ecosystem. For more information, please take a look at the architecture diagram provided above.
+
+## Looking to Save Costs on the Demo?
+
+We've got you covered! The biggest cost factor of this demo is the usage of EC2 instances for the Workbench and the Worker. To optimize costs when you're not actively working on the demo, you can choose to stop and start the instances at your convenience. Simply follow the steps outlined in the [AWS documentation](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Stop_Start.html#starting-stopping-instances).
 
 ## Tools Details
 
@@ -106,6 +118,7 @@ This was done to keep all project files within the AWS ecosystem and to simplify
 - [ETAS COSYM](https://www.etas.com/en/products/cosym-co-simulation-platform.php) is a powerful simulation and integration platform for testing and validating software in all phases of software development. ETAS COSYM helps to reduce costs and time by moving HiL tests forward to virtual simulation (MiL/SiL).
 
 - [ETAS MODEL-SIMULATOR](https://www.etas.com/en/applications/software-in-the-loop-testing-in-the-cloud.php) is a platform for parallel simulation, test execution and driving cycle generation. Allowing you to significantly increase the simulation speed, receive fast feedback and detect errors at an early stage – all while maintaining data security in according to ISO 27001.
+ 
 
 - [ETAS RTA-CAR](https://www.etas.com/en/products/rta_software_products.php) includes basic software modules and tools for the development of ECU software.
 
@@ -113,4 +126,4 @@ This was done to keep all project files within the AWS ecosystem and to simplify
 
 From [CloudFormation](https://console.aws.amazon.com/cloudformation/home) delete `project-1-dev-software-factory` stack.
 
-You will also need to manually empty and delete the `project-1-dev-<ACCOUNT_ID>-<REGION>` Amazon S3 bucket.
+You will also need to manually empty and delete the `project-1-dev-<ACCOUNT_ID>-<REGION>` Amazon S3 bucket and few Cloudwatch log groups. 
