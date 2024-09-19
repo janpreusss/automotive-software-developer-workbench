@@ -150,4 +150,4 @@ dev:
       - name: PushToDigitalAuto
         actions:
           - name: PushResults
-            buildspec: push-result.yml
+            buildspec: push-result-fmu-to-digitalauto.yml
