@@ -139,10 +139,12 @@ dev:
         actions:
           - name: vECUBuild
             buildspec: vecu-build.yml
-      - name: COSYMBuild
-        actions:
-          - name: COSYMBuild
-            buildspec: cosym-build.yml
+            imageRegistry: 730335352765.dkr.ecr.eu-central-1.amazonaws.com/digital-auto/vecubuilder
+            imageTag: 1.6.0
+      # - name: COSYMBuild
+      #   actions:
+      #     - name: COSYMBuild
+      #       buildspec: cosym-build.yml
       - name: Validate
         actions:
           - name: ValidateFMU

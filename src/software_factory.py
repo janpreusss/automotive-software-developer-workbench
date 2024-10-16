@@ -110,6 +110,7 @@ class SoftwareFactoryStack(Stack):
         
     cb_role = iam.Role(self, 'CodeBuildRole', 
         assumed_by=iam.ServicePrincipal('codebuild.amazonaws.com'))
+    cb_role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name('AmazonEC2ContainerRegistryPullOnly'))
     self.artifact.grant_read_write(cb_role)
     self.source_code.grant_read_write(cb_role)
 
@@ -166,6 +167,11 @@ class SoftwareFactoryStack(Stack):
                         value=f'{self.artifact.bucket_name}'),
                     'WORKER_QUEUE_SECRET_REGION': cb.BuildEnvironmentVariable(
                         value=region)}}
+            
+            if hasattr(action, 'imageRegistry') and hasattr(action, 'imageTag'):
+                kargs['environment']['build_image'] = cb.LinuxBuildImage.from_ecr_repository(
+                    repository=ec2.Repository.from_repository_name(self, f'{action.name}Repo', action.imageRegistry),
+                    tag=action.imageTag)
             
             if config.workers and hasattr(workers, 'broker'):
                 kargs.update({
