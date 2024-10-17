@@ -23,7 +23,7 @@ class VpcModel(BaseModel):
 class ActionModel(BaseModel):
     name: str
     buildspec: str
-    imageRegistry: Optional[str] = None
+    imageRepositoryArn: Optional[str] = None
     imageTag: Optional[str] = None
     
 class StageModel(BaseModel):
@@ -157,16 +157,16 @@ class SoftwareFactoryStack(Stack):
     for stage in config.stages:
         actions = []
         for action in stage.actions:
+
+            repository=None
+            if action.imageRepositoryArn:
+                repository=ecr.Repository.from_repository_arn(self, f'{action.name}Repo', action.imageRepositoryArn)
+
             kargs = {
                 'role': cb_role,
                 'environment': cb.BuildEnvironment(
                     compute_type=cb.ComputeType.SMALL,
-                    build_image=(
-                        cb.LinuxBuildImage.from_ecr_repository(
-                            repository=ecr.Repository.from_repository_name(self, f'{action.name}Repo', action.imageRegistry),
-                            tag=action.imageTag
-                        ) if hasattr(action, 'imageRegistry') and hasattr(action, 'imageTag') else cb.LinuxBuildImage.AMAZON_LINUX_2_5
-                    )
+                    build_image=(cb.LinuxBuildImage.from_ecr_repository(repository, action.imageTag) if repository else cb.LinuxBuildImage.AMAZON_LINUX_2_5)
                 ),
                 'build_spec': cb.BuildSpec.from_source_filename(f'.cb/{action.buildspec}'),
                 'environment_variables': {
