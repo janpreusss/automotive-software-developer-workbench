@@ -141,14 +141,12 @@ dev:
             buildspec: vecu-build.yml
             imageRepositoryArn: arn:aws:ecr:eu-central-1:730335352765:repository/digital-auto/vecubuilder
             imageTag: 1.6.0
-      # - name: COSYMBuild
-      #   actions:
-      #     - name: COSYMBuild
-      #       buildspec: cosym-build.yml
       - name: Validate
         actions:
           - name: ValidateFMU
             buildspec: fmu-validate.yml
+            imageRepositoryArn: arn:aws:ecr:eu-central-1:730335352765:repository/digital-auto/fmpy
+            imageTag: 0.3.21
       - name: PushToDigitalAuto
         actions:
           - name: PushResults
