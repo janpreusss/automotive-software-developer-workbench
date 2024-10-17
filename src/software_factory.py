@@ -9,7 +9,8 @@ from aws_cdk import (
     aws_iam as iam,
     aws_s3 as s3,
     aws_ec2 as ec2,
-    aws_cloudtrail as ct
+    aws_cloudtrail as ct,
+    aws_ecr as ecr
 )
 from pydantic import BaseModel
 from typing import Optional, List
@@ -22,6 +23,8 @@ class VpcModel(BaseModel):
 class ActionModel(BaseModel):
     name: str
     buildspec: str
+    imageRegistry: Optional[str] = None
+    imageTag: Optional[str] = None
     
 class StageModel(BaseModel):
     name: str
@@ -158,7 +161,13 @@ class SoftwareFactoryStack(Stack):
                 'role': cb_role,
                 'environment': cb.BuildEnvironment(
                     compute_type=cb.ComputeType.SMALL,
-                    build_image=cb.LinuxBuildImage.AMAZON_LINUX_2_5),
+                    build_image=(
+                        cb.LinuxBuildImage.from_ecr_repository(
+                            repository=ecr.Repository.from_repository_name(self, f'{action.name}Repo', action.imageRegistry),
+                            tag=action.imageTag
+                        ) if hasattr(action, 'imageRegistry') and hasattr(action, 'imageTag') else cb.LinuxBuildImage.AMAZON_LINUX_2_5
+                    )
+                ),
                 'build_spec': cb.BuildSpec.from_source_filename(f'.cb/{action.buildspec}'),
                 'environment_variables': {
                     'SOURCE_CODE_BUCKET_NAME': cb.BuildEnvironmentVariable(
@@ -167,11 +176,6 @@ class SoftwareFactoryStack(Stack):
                         value=f'{self.artifact.bucket_name}'),
                     'WORKER_QUEUE_SECRET_REGION': cb.BuildEnvironmentVariable(
                         value=region)}}
-            
-            if hasattr(action, 'imageRegistry') and hasattr(action, 'imageTag'):
-                kargs['environment']['build_image'] = cb.LinuxBuildImage.from_ecr_repository(
-                    repository=ec2.Repository.from_repository_name(self, f'{action.name}Repo', action.imageRegistry),
-                    tag=action.imageTag)
             
             if config.workers and hasattr(workers, 'broker'):
                 kargs.update({
