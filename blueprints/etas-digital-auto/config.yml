@@ -129,25 +129,19 @@ dev:
             Register-ScheduledTask -TaskName "CheckWorker" -Action $action -Trigger $trigger -Settings $settings -User Administrator -Password "Etas2024@"
           }
     stages:
-      - name: CodeGeneration
+      - name: Generate ASW Sources
         actions:
-          - name: ASWCodeGeneration
+          - name: Generate ASW Sources
             buildspec: asw-codegeneration.yml
-          - name: EHBSaas
-            buildspec: ehb-saas.yml
-      - name: vECUBuild
+      - name: Build Virtual ECU FMU
         actions:
-          - name: vECUBuild
+          - name: Build Virtual ECU FMU
             buildspec: vecu-build.yml
             imageRepositoryArn: arn:aws:ecr:eu-central-1:730335352765:repository/digital-auto/vecubuilder
-            imageTag: 1.6.0
-      - name: Validate
+            imageTag: debug
+      - name: Validate & Push to Digital.auto
         actions:
-          - name: ValidateFMU
+          - name: Validate & Push to Digital.auto
             buildspec: fmu-validate.yml
-            imageRepositoryArn: arn:aws:ecr:eu-central-1:730335352765:repository/digital-auto/fmpy
-            imageTag: 0.3.21
-      - name: PushToDigitalAuto
-        actions:
-          - name: PushResults
-            buildspec: push-result-fmu-to-digitalauto.yml
+            imageRepositoryArn: arn:aws:ecr:eu-central-1:730335352765:repository/digital-auto/vecubuilder
+            imageTag: debug
