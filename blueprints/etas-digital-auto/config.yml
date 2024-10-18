@@ -129,19 +129,19 @@ dev:
             Register-ScheduledTask -TaskName "CheckWorker" -Action $action -Trigger $trigger -Settings $settings -User Administrator -Password "Etas2024@"
           }
     stages:
-      - name: Generate ASW Sources
+      - name: Generate_ASW_Sources
         actions:
-          - name: Generate ASW Sources
+          - name: Generate_ASW_Sources
             buildspec: asw-codegeneration.yml
-      - name: Build Virtual ECU FMU
+      - name: Build_Virtual_ECU_FMU
         actions:
-          - name: Build Virtual ECU FMU
+          - name: Build_Virtual_ECU_FMU
             buildspec: vecu-build.yml
             imageRepositoryArn: arn:aws:ecr:eu-central-1:730335352765:repository/digital-auto/vecubuilder
             imageTag: debug
-      - name: Validate & Push to Digital.auto
+      - name: Validate_And_Push_to_Digital.auto
         actions:
-          - name: Validate & Push to Digital.auto
+          - name: Validate_And_Push_to_Digital.auto
             buildspec: fmu-validate.yml
             imageRepositoryArn: arn:aws:ecr:eu-central-1:730335352765:repository/digital-auto/vecubuilder
             imageTag: debug
