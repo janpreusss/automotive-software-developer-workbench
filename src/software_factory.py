@@ -147,12 +147,15 @@ class SoftwareFactoryStack(Stack):
     )],
         read_write_type=ct.ReadWriteType.WRITE_ONLY
     )
-    source_stage.add_action(cp_actions.S3SourceAction(
+
+    source_action = cp_actions.S3SourceAction(
         action_name='S3Source',
         output=source_artifact,
         bucket=self.source_code,
         bucket_key=key,
-        trigger=cp_actions.S3Trigger.EVENTS))
+        trigger=cp_actions.S3Trigger.EVENTS)
+
+    source_stage.add_action(source_action)
 
     for stage in config.stages:
         actions = []
@@ -175,7 +178,9 @@ class SoftwareFactoryStack(Stack):
                     'ARTIFACT_BUCKET_NAME': cb.BuildEnvironmentVariable(
                         value=f'{self.artifact.bucket_name}'),
                     'WORKER_QUEUE_SECRET_REGION': cb.BuildEnvironmentVariable(
-                        value=region)}}
+                        value=region),
+                    'VERSION_ID': cb.BuildEnvironmentVariable(
+                        value=source_action.variables.version_id),}}
             
             if config.workers and hasattr(workers, 'broker'):
                 kargs.update({
