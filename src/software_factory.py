@@ -131,11 +131,24 @@ class SoftwareFactoryStack(Stack):
             workers.secret.grant_read(cb_role)
             self.source_code.grant_read_write(workers.role)
 
+    version_id=cp.Variable(
+                variable_name='VERSION_ID',
+                description='S3 Version ID',
+                default_value='#{SourceVariables.VersionId}'
+                )
+
+    execution_id=cp.Variable(
+                variable_name='EXECUTION_ID',
+                description='S3 Version ID',
+                default_value='#{codepipeline.PipelineExecutionId}'
+                )
+
     pipeline = cp.Pipeline(self, 'Pipeline', 
         pipeline_name=f'{project_name}-{env_name}',
         pipeline_type=cp.PipelineType.V2,
         cross_account_keys=False,
-        artifact_bucket=self.artifact)
+        artifact_bucket=self.artifact,
+        variables=[version_id, execution_id])
         
     source_stage = pipeline.add_stage(stage_name='Source')
     source_artifact = cp.Artifact()
@@ -154,7 +167,8 @@ class SoftwareFactoryStack(Stack):
         output=source_artifact,
         bucket=self.source_code,
         bucket_key=key,
-        trigger=cp_actions.S3Trigger.EVENTS)
+        trigger=cp_actions.S3Trigger.EVENTS,
+        variables_namespace='SourceVariables')
 
     source_stage.add_action(source_action)
 
@@ -179,11 +193,7 @@ class SoftwareFactoryStack(Stack):
                     'ARTIFACT_BUCKET_NAME': cb.BuildEnvironmentVariable(
                         value=f'{self.artifact.bucket_name}'),
                     'WORKER_QUEUE_SECRET_REGION': cb.BuildEnvironmentVariable(
-                        value=region),
-                    'VERSION_ID': cb.BuildEnvironmentVariable(
-                        value=source_action.variables.version_id),
-                    'EXECUTION_ID': cb.BuildEnvironmentVariable(
-                        value=cp.GlobalVariables.EXECUTION_ID)}}
+                        value=region)}}
             
             if config.workers and hasattr(workers, 'broker'):
                 kargs.update({
