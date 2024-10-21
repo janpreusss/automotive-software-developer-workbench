@@ -133,6 +133,7 @@ class SoftwareFactoryStack(Stack):
 
     pipeline = cp.Pipeline(self, 'Pipeline', 
         pipeline_name=f'{project_name}-{env_name}',
+        pipeline_type=cp.PipelineType.V2,
         cross_account_keys=False,
         artifact_bucket=self.artifact)
         
@@ -180,7 +181,9 @@ class SoftwareFactoryStack(Stack):
                     'WORKER_QUEUE_SECRET_REGION': cb.BuildEnvironmentVariable(
                         value=region),
                     'VERSION_ID': cb.BuildEnvironmentVariable(
-                        value=source_action.variables.version_id),}}
+                        value=source_action.variables.version_id),
+                    'EXECUTION_ID': cb.BuildEnvironmentVariable(
+                        value=cp.GlobalVariables.EXECUTION_ID)}}
             
             if config.workers and hasattr(workers, 'broker'):
                 kargs.update({
@@ -196,7 +199,6 @@ class SoftwareFactoryStack(Stack):
             
             actions.append(cp_actions.CodeBuildAction(
                 action_name=action.name,
-                config = pipeline.GlobalVariables.execution_id,
                 input=source_artifact,
                 project=cb.PipelineProject(self, action.name, **kargs)))
             
