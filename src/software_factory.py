@@ -131,24 +131,11 @@ class SoftwareFactoryStack(Stack):
             workers.secret.grant_read(cb_role)
             self.source_code.grant_read_write(workers.role)
 
-    version_id=cp.Variable(
-                variable_name='VERSION_ID',
-                description='S3 Version ID',
-                default_value='#{SourceVariables.VersionId}'
-                )
-
-    execution_id=cp.Variable(
-                variable_name='EXECUTION_ID',
-                description='S3 Version ID',
-                default_value='#{codepipeline.PipelineExecutionId}'
-                )
-
     pipeline = cp.Pipeline(self, 'Pipeline', 
         pipeline_name=f'{project_name}-{env_name}',
-        pipeline_type=cp.PipelineType.V2,
+        pipeline_type=cp.PipelineType.V1,
         cross_account_keys=False,
-        artifact_bucket=self.artifact,
-        variables=[version_id, execution_id])
+        artifact_bucket=self.artifact)
         
     source_stage = pipeline.add_stage(stage_name='Source')
     source_artifact = cp.Artifact()
@@ -210,6 +197,11 @@ class SoftwareFactoryStack(Stack):
             actions.append(cp_actions.CodeBuildAction(
                 action_name=action.name,
                 input=source_artifact,
+                environment_variables = {
+                    'VERSION_ID': cb.BuildEnvironmentVariable(
+                        value=source_action.variables.version_id),
+                    'EXECUTION_ID': cb.BuildEnvironmentVariable(
+                        value=cp.GlobalVariables.EXECUTION_ID)},
                 project=cb.PipelineProject(self, action.name, **kargs)))
             
         pipeline.add_stage(stage_name=stage.name, actions=actions)
