@@ -196,6 +196,7 @@ class SoftwareFactoryStack(Stack):
             
             actions.append(cp_actions.CodeBuildAction(
                 action_name=action.name,
+                config = pipeline.GlobalVariables.execution_id,
                 input=source_artifact,
                 project=cb.PipelineProject(self, action.name, **kargs)))
             
