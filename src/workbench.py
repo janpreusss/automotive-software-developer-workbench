@@ -107,7 +107,8 @@ class Workbench(Construct):
             vpc=vpc,
             vpc_subnets=ec2.SubnetSelection(
                 subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-            user_data=ec2.UserData.for_windows(persist=True))
+            user_data=ec2.UserData.for_windows(persist=True),
+            user_data_causes_replacement=True)
 
         account_id = Stack.of(self).account
         region = Stack.of(self).region

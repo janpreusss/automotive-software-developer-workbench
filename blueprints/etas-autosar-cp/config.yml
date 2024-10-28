@@ -31,6 +31,8 @@ dev:
           # Setup the working directory and initialize the ascet workspace
           if(!(Test-Path -Path "C:\demo_etas\working-dir" )) {
             git clone s3://$env:SOURCE_BUCKET_NAME/3.1.0-git/ C:\demo_etas\working-dir\
+            git config --global user.email "no-reply@etas.com"
+            git config --global user.name "workbench"
             C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe -nosplash -data C:\demo_etas\working-dir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll C:\demo_etas\src\ascet\main\ -cleanBuild all
           }
           # Setup the rclone configuration
@@ -75,6 +77,8 @@ dev:
           if(!(Test-Path -Path "c:\demo_etas\working-dir\src" )) {
             Copy-Item -Path C:\App_Installers\tools\ETAS_Tools\aasf-etas-autosar-cp\repo -Destination c:\demo_etas\working-dir -Recurse
             aws s3 cp c:\demo_etas\working-dir s3://$env:SOURCE_BUCKET_NAME/3.1.0 --recursive
+            git config --global user.email "no-reply@etas.com"
+            git config --global user.name "worker"
             $localRepoPath = "C:\demo_etas\working-dir"
             Set-Location $localRepoPath
             git init

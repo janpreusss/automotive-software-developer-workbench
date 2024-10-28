@@ -134,7 +134,8 @@ class Workers(Construct):
             vpc=vpc,
             vpc_subnets=ec2.SubnetSelection(
                 subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-            user_data=ec2.UserData.for_windows(persist=True))
+            user_data=ec2.UserData.for_windows(persist=True),
+            user_data_causes_replacement=True)
 
         secret_name = f'/{project_name}-{env_name}/broker_credentials'
         self.secret = sm.Secret(self, "Secret",
