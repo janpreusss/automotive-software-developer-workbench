@@ -27,9 +27,10 @@ dev:
           net user Administrator "Etas2024@" /active:Yes
           [Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable('Path', "Machine") + ";c:\App_Installers\tools\rclone-v1.64.2-windows-amd64", "Machine")
           aws configure set default.region $env:AWS_DEFAULT_REGION
+          pip install git-remote-s3
           # Setup the working directory and initialize the ascet workspace
           if(!(Test-Path -Path "C:\demo_etas\working-dir" )) {
-            aws s3 cp s3://$env:SOURCE_BUCKET_NAME/3.0.0/ c:\demo_etas\working-dir --recursive  
+            git clone s3://$env:SOURCE_BUCKET_NAME/3.1.0-git/ C:\demo_etas\working-dir\
             C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe -nosplash -data C:\demo_etas\working-dir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll C:\demo_etas\src\ascet\main\ -cleanBuild all
           }
           # Setup the rclone configuration
@@ -53,41 +54,6 @@ dev:
           "@
             Set-Content "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\rclone.bat" $script
           }
-          # Setup the sync to s3 script
-          if(!(Test-Path -Path "C:\Users\Administrator\Desktop\sync-to-s3.ps1" )) {
-          $syncaws = @"
-          `$ErrorActionPreference = "Stop"`
-          if(Test-Path -Path "C:\demo_etas\working-dir.zip" ) {
-            rm C:\demo_etas\working-dir.zip
-          }
-          & "C:\Program Files\7-zip\7z" a -tzip C:\demo_etas\working-dir.zip -r C:\demo_etas\working-dir\* -x!ws
-          aws s3 cp C:\demo_etas\working-dir.zip s3://$env:SOURCE_BUCKET_NAME/
-          aws s3 sync C:\demo_etas\working-dir s3://$env:SOURCE_BUCKET_NAME/working-dir --delete --exclude "ws"
-          "@
-            Set-Content "C:\Users\Administrator\Desktop\sync-to-s3.ps1" $syncaws
-            # On the first run, execute the sync script 
-            & "C:\Users\Administrator\Desktop\sync-to-s3.ps1"
-          }
-          # Setup the restore from s3 script
-          if(!(Test-Path -Path "C:\Users\Administrator\Desktop\restore-from-s3.ps1" )) {
-          $restore = @"
-          `$ErrorActionPreference = "Stop"`
-          # Check if the process ascet.exe is running
-          $process = Get-Process -Name "ascet" -ErrorAction SilentlyContinue
-
-          # If the process is found, kill it
-          if ($process) {
-              Stop-Process -Name "ascet" -Force
-              Write-Output "ascet.exe was running and has been terminated."
-          }
-          if(Test-Path -Path "C:\demo_etas\working-dir" ) {
-            rm -r C:\demo_etas\working-dir
-          }
-          aws s3 cp s3://$env:SOURCE_BUCKET_NAME/3.0.0 C:\demo_etas\working-dir --recursive
-          C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe -nosplash -data C:\demo_etas\working-dir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll C:\demo_etas\working-dir\src\ascet\main\ -cleanBuild all
-          "@
-            Set-Content "C:\Users\Administrator\Desktop\restore-from-s3.ps1" $restore
-          }
     workers:
       instance_type: m6i.xlarge
       ami:
@@ -105,10 +71,17 @@ dev:
           Set-ExecutionPolicy -ExecutionPolicy Unrestricted
           net user Administrator "Etas2024@" /active:Yes
           aws configure set default.region $env:AWS_DEFAULT_REGION
+          pip install git-remote-s3
           if(!(Test-Path -Path "c:\demo_etas\working-dir\src" )) {
             Copy-Item -Path C:\App_Installers\tools\ETAS_Tools\aasf-etas-autosar-cp\repo -Destination c:\demo_etas\working-dir -Recurse
-            aws s3 cp c:\demo_etas\working-dir s3://$env:SOURCE_BUCKET_NAME/3.0.0 --recursive
-            aws s3 cp c:\demo_etas\working-dir s3://$env:SOURCE_BUCKET_NAME/working-dir --recursive
+            aws s3 cp c:\demo_etas\working-dir s3://$env:SOURCE_BUCKET_NAME/3.1.0 --recursive
+            $localRepoPath = "C:\demo_etas\working-dir"
+            Set-Location $localRepoPath
+            git init
+            git add --all
+            git commit -a -m  "Initial commit"
+            git remote add s3 "s3://$env:SOURCE_BUCKET_NAME/3.1.0-git/"
+            git push s3 master
           }
           cosym --start --mode=headless --acknowledgement=yes
           if(!(Test-Path -Path "C:\checkworker.ps1" )) {
