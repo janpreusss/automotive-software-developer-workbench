@@ -139,7 +139,7 @@ class SoftwareFactoryStack(Stack):
         
     source_stage = pipeline.add_stage(stage_name='Source')
     source_artifact = cp.Artifact()
-    key = 'trigger.txt'
+    key = 'trigger.zip'
 
     trail = ct.Trail(self, "CloudTrail", bucket=self.cloudtrail)
     trail.add_s3_event_selector([ct.S3EventSelector(

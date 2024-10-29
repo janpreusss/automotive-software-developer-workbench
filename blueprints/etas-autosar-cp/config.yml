@@ -23,36 +23,50 @@ dev:
           device_name: /dev/sda1
       user_data:
         - |-
-          Set-ExecutionPolicy -ExecutionPolicy Unrestricted
+          # Set execution policy and activate Administrator account
+          Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Force
           net user Administrator "Etas2024@" /active:Yes
-          [Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable('Path', "Machine") + ";c:\App_Installers\tools\rclone-v1.64.2-windows-amd64", "Machine")
+
+          # Set environment variable and install required dependencies
+          $toolPath = "c:\App_Installers\tools\rclone-v1.64.2-windows-amd64"
+          [Environment]::SetEnvironmentVariable("Path", "$([Environment]::GetEnvironmentVariable('Path', 'Machine'));$toolPath", "Machine")
           aws configure set default.region $env:AWS_DEFAULT_REGION
           pip install git-remote-s3
+
           # Setup the working directory and initialize the ascet workspace
-          if(!(Test-Path -Path "C:\demo_etas\working-dir" )) {
-            git clone s3://$env:SOURCE_BUCKET_NAME/3.1.0-git/ C:\demo_etas\working-dir\
-            git config --global user.email "no-reply@etas.com"
-            git config --global user.name "workbench"
-            C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe -nosplash -data C:\demo_etas\working-dir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll C:\demo_etas\working-dir\src\ascet\main\ -cleanBuild all
+          $workingDir = "C:\demo_etas\working-dir"
+          $hookDir = "$workingDir\.git\hooks"
+          $triggerFile = "$hookDir\trigger.txt"
+          $triggerZip = "$hookDir\trigger.zip"
+
+          if (!(Test-Path -Path $workingDir)) {
+              git clone s3://$env:SOURCE_BUCKET_NAME/3.1.0-git/ $workingDir
+              git config --global user.email "no-reply@etas.com"
+              git config --global user.name "workbench"
+              Start-Process -FilePath "C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe" `
+                  -ArgumentList "-nosplash -data $workingDir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll $workingDir\src\ascet\main\ -cleanBuild all" `
+                  -NoNewWindow -Wait
           }
-          # Create the pre-push git webhook to push the trigger file before any actual git push
-          if(!(Test-Path -Path "C:\demo_etas\working-dir\.git\hooks\pre-push")) {
-          $content = @"
+
+          # Setup git pre-push hook and trigger file
+          if (!(Test-Path -Path "$hookDir\pre-push")) {
+          $prePushContent = @'
           #!/bin/sh
-          aws s3 cp /c/demo_etas/working-dir/.git/hooks/trigger.txt s3://$SOURCE_BUCKET_NAME/trigger.txt
-          "@
-            Set-Content -Path "C:\demo_etas\working-dir\.git\hooks\pre-push" -Value $content -Force
+          aws s3 cp /c/demo_etas/working-dir/.git/hooks/trigger.zip s3://$env:SOURCE_BUCKET_NAME/trigger.zip
+          '@
+              Set-Content -Path "$hookDir\pre-push" -Value $prePushContent -Force
           }
-          # Create the file for triggering the pipelines
-          if(!(Test-Path -Path "C:\demo_etas\working-dir\.git\hooks\trigger.txt")) {
-          $content = @"
-          Triggers the Pipeline
-          "@
-            Set-Content -Path "C:\demo_etas\working-dir\.git\hooks\trigger.txt" -Value $content -Force
+
+          if (!(Test-Path -Path $triggerZip)) {
+              $triggerContent = "Triggers the Pipeline"
+              Set-Content -Path $triggerFile -Value $triggerContent -Force
+              Compress-Archive -Path $triggerFile -DestinationPath $triggerZip -Force
           }
-          # Setup the rclone configuration
-          if(!(Test-Path -Path "C:\Users\Administrator\AppData\Roaming\rclone\rclone.conf" )) {
-          $config = @"
+
+          # Setup rclone configuration
+          $rcloneConfigPath = "C:\Users\Administrator\AppData\Roaming\rclone\rclone.conf"
+          if (!(Test-Path -Path $rcloneConfigPath)) {
+          $configContent = @"
           [remote]
           type = s3
           provider = AWS
@@ -61,47 +75,60 @@ dev:
           location_constraint = $env:AWS_DEFAULT_REGION
           storage_class = STANDARD
           "@
-            New-Item -Path "C:\Users\Administrator\AppData\Roaming\" -Name "rclone" -ItemType "directory" -force
-            Set-Content "C:\Users\Administrator\AppData\Roaming\rclone\rclone.conf" $config
+              New-Item -Path "C:\Users\Administrator\AppData\Roaming\rclone" -ItemType Directory -Force
+              Set-Content -Path $rcloneConfigPath -Value $configContent
           }
-          # Setup the rclone mount
-          if(!(Test-Path -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\rclone.bat" )) {
-          $script = @"
+
+          # Setup rclone mount
+          $rcloneStartupScript = "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\rclone.bat"
+          if (!(Test-Path -Path $rcloneStartupScript)) {
+          $mountScript = @"
           rclone mount remote:/$env:ARTIFACT_BUCKET_NAME C:\Users\Administrator\Desktop\Artifacts --no-console --log-file C:\Users\Administrator\AppData\Roaming\rclone\log.txt --vfs-cache-mode full
           "@
-            Set-Content "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\rclone.bat" $script
+              Set-Content -Path $rcloneStartupScript -Value $mountScript
           }
-          if(!(Test-Path -Path "C:\checkgit.ps1" )) {
-          $script = @"
-          if(!(Test-Path -Path "C:\demo_etas\working-dir\.git" )) {
-            git clone s3://$env:SOURCE_BUCKET_NAME/3.1.0-git/ C:\demo_etas\working-dir\
-            C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe -nosplash -data C:\demo_etas\working-dir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll C:\demo_etas\working-dir\src\ascet\main\ -cleanBuild all
-          }
-          if(!(Test-Path -Path "C:\demo_etas\working-dir\src" )) {
-            git pull
-            C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe -nosplash -data C:\demo_etas\working-dir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll C:\demo_etas\working-dir\src\ascet\main\ -cleanBuild all
-          }
-          # Create the pre-push git webhook to push the trigger file before any actual git push
-          if(!(Test-Path -Path "C:\demo_etas\working-dir\.git\hooks\pre-push")) {
-          $content = @"
-          #!/bin/sh
-          aws s3 cp /c/demo_etas/working-dir/.git/hooks/trigger.txt s3://$SOURCE_BUCKET_NAME/trigger.txt
-          "@
-            Set-Content -Path "C:\demo_etas\working-dir\.git\hooks\pre-push" -Value $content -Force
-          }
-          # Create the file for triggering the pipelines
-          if(!(Test-Path -Path "C:\demo_etas\working-dir\.git\hooks\trigger.txt")) {
-          $content = @"
-          Triggers the Pipeline
-          "@
-            Set-Content -Path "C:\demo_etas\working-dir\.git\hooks\trigger.txt" -Value $content -Force
-          }
-          "@
-            Set-Content "C:\checkgit.ps1" $script
-            $action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "C:\checkgit.ps1"
-            $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
-            $settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel
-            Register-ScheduledTask -TaskName "CheckGit" -Action $action -Trigger $trigger -Settings $settings -User Administrator -Password "Etas2024@"
+
+          # Setup scheduled task to check and update Git repository
+          $checkGitScriptPath = "C:\checkgit.ps1"
+          if (!(Test-Path -Path $checkGitScriptPath)) {
+          $checkGitScript = @'
+              if (!(Test-Path -Path "C:\demo_etas\working-dir\.git")) {
+                  git clone s3://$env:SOURCE_BUCKET_NAME/3.1.0-git/ C:\demo_etas\working-dir\
+                  git config --global user.email "no-reply@etas.com"
+                  git config --global user.name "workbench"
+                  Start-Process -FilePath "C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe" `
+                      -ArgumentList "-nosplash -data C:\demo_etas\working-dir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll C:\demo_etas\working-dir\src\ascet\main\ -cleanBuild all" `
+                      -NoNewWindow -Wait
+              }
+              if (!(Test-Path -Path "C:\demo_etas\working-dir\src")) {
+                  git pull
+                  Start-Process -FilePath "C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe" `
+                      -ArgumentList "-nosplash -data C:\demo_etas\working-dir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll C:\demo_etas\working-dir\src\ascet\main\ -cleanBuild all" `
+                      -NoNewWindow -Wait
+              }
+              # Setup the git pre-push hook and trigger zip
+              if (!(Test-Path -Path "C:\demo_etas\working-dir\.git\hooks\pre-push")) {
+                  $prePushContent = @'
+                  #!/bin/sh
+                  aws s3 cp /c/demo_etas/working-dir/.git/hooks/trigger.zip s3://$env:SOURCE_BUCKET_NAME/trigger.zip
+                  '@
+                  Set-Content -Path "C:\demo_etas\working-dir\.git\hooks\pre-push" -Value $prePushContent -Force
+              }
+              if (!(Test-Path -Path "C:\demo_etas\working-dir\.git\hooks\trigger.zip")) {
+                  $triggerContent = "Triggers the Pipeline"
+                  Set-Content -Path "C:\demo_etas\working-dir\.git\hooks\trigger.txt" -Value $triggerContent -Force
+                  Compress-Archive -Path "C:\demo_etas\working-dir\.git\hooks\trigger.txt" -DestinationPath "C:\demo_etas\working-dir\.git\hooks\trigger.zip" -Force
+              }
+          '@
+              Set-Content -Path $checkGitScriptPath -Value $checkGitScript -Force
+
+              # Define the scheduled task action and trigger
+              $action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument $checkGitScriptPath
+              $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
+              $settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel
+
+              # Register the scheduled task
+              Register-ScheduledTask -TaskName "CheckGit" -Action $action -Trigger $trigger -Settings $settings -User "Administrator" -Password "Etas2024@"
           }
     workers:
       instance_type: m6i.xlarge
@@ -134,7 +161,8 @@ dev:
             git remote add s3 "s3://$env:SOURCE_BUCKET_NAME/3.1.0-git/"
             git push s3 master
             New-Item -Path "C:\demo_etas\working-dir\.git\hooks\trigger.txt" -ItemType File -force
-            aws s3 cp C:\demo_etas\working-dir\.git\hooks\trigger.txt s3://$env:SOURCE_BUCKET_NAME/trigger.txt
+            Compress-Archive -Path "C:\demo_etas\working-dir\.git\hooks\trigger.txt" -DestinationPath "C:\demo_etas\working-dir\.git\hooks\trigger.zip" -Force
+            aws s3 cp C:\demo_etas\working-dir\.git\hooks\trigger.zip s3://$env:SOURCE_BUCKET_NAME/trigger.zip
           }
           cosym --start --mode=headless --acknowledgement=yes
           if(!(Test-Path -Path "C:\checkworker.ps1" )) {
