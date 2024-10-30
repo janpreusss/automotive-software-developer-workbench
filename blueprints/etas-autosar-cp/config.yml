@@ -41,15 +41,15 @@ dev:
               git clone s3://$env:SOURCE_BUCKET_NAME/3.1.0-git/ $workingDir
               git config --global user.email "no-reply@etas.com"
               git config --global user.name "workbench"
-              C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe -nosplash -data C:\demo_etas\working-dir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll C:\demo_etas\src\ascet\main\ -cleanBuild all
+              C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe -nosplash -data C:\demo_etas\working-dir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll C:\demo_etas\working-dir\src\ascet\main\ -cleanBuild all
           }
 
           # Setup git pre-push hook and trigger file
           if (!(Test-Path -Path "$hookDir\pre-push")) {
           $prePushContent = @'
           #!/bin/sh
-          tar -a -c -f /C/demo_etas/working-dir/.git/hooks/trigger.zip -C /C/demo_etas/working-dir .cb
-          aws s3 cp /c/demo_etas/working-dir/.git/hooks/trigger.zip s3://$env:SOURCE_BUCKET_NAME/trigger.zip
+          "/C/Program Files/7-zip/7z" a -tzip /C/demo_etas/working-dir/.git/hooks/trigger.zip -r /C/demo_etas/working-dir/.cb >NUL:
+          aws s3 cp /c/demo_etas/working-dir/.git/hooks/trigger.zip s3://$SOURCE_BUCKET_NAME/trigger.zip >NUL:
           '@
               Set-Content -Path "$hookDir\pre-push" -Value $prePushContent -Force
           }
@@ -82,8 +82,9 @@ dev:
           if (!(Test-Path -Path $checkGitScriptPath)) {
           $checkGitScript = @"
           if (!(Test-Path -Path "C:\demo_etas\working-dir\src")) {
+            Set-Location -Path "C:\demo_etas\working-dir"
             git pull
-            C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe -nosplash -data C:\demo_etas\working-dir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll C:\demo_etas\src\ascet\main\ -cleanBuild all
+            C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe -nosplash -data C:\demo_etas\working-dir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll C:\demo_etas\working-dir\src\ascet\main\ -cleanBuild all
           }
           "@
             Set-Content -Path $checkGitScriptPath -Value $checkGitScript -Force
@@ -127,7 +128,7 @@ dev:
             git remote add s3 "s3://$env:SOURCE_BUCKET_NAME/3.1.0-git/"
             git push s3 master
             New-Item -Path "C:\demo_etas\working-dir\.git\hooks\trigger.txt" -ItemType File -force
-            Compress-Archive -Path "C:\demo_etas\working-dir\.cb" -DestinationPath "C:\demo_etas\working-dir\.git\hooks\trigger.zip" -Force
+            & "C:\Program Files\7-zip\7z" a -tzip C:\demo_etas\working-dir\.git\hooks\trigger.zip -r C:\demo_etas\working-dir\.cb
             aws s3 cp C:\demo_etas\working-dir\.git\hooks\trigger.zip s3://$env:SOURCE_BUCKET_NAME/trigger.zip
           }
           cosym --start --mode=headless --acknowledgement=yes
