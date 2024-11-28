@@ -1,4 +1,5 @@
 project_name: project-1
+gitrepo_version_name: 3.1.0
 dev:
   software_factory:
     artifacts:
@@ -38,7 +39,7 @@ dev:
           $hookDir = "$workingDir\.git\hooks"
 
           if (!(Test-Path -Path $workingDir)) {
-              git clone s3://$env:SOURCE_BUCKET_NAME/3.1.0-git/ $workingDir
+              git clone s3://$env:SOURCE_BUCKET_NAME/$env:GITREPO_VERSION_NAME-git/ $workingDir
               git config --global user.email "no-reply@etas.com"
               git config --global user.name "workbench"
               C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe -nosplash -data C:\demo_etas\working-dir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll C:\demo_etas\working-dir\src\ascet\main\ -cleanBuild all
@@ -53,7 +54,7 @@ dev:
           '@
               Set-Content -Path "$hookDir\pre-push" -Value $prePushContent -Force
           }
-
+                
           # Setup the rclone configuration
           if(!(Test-Path -Path "C:\Users\Administrator\AppData\Roaming\rclone\rclone.conf" )) {
           $config = @"
@@ -83,7 +84,7 @@ dev:
           $checkGitScript = @"
           if (!(Test-Path -Path "C:\demo_etas\working-dir\src")) {
             Set-Location -Path "C:\demo_etas\working-dir"
-            git pull
+            git pull s3 master
             C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe -nosplash -data C:\demo_etas\working-dir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll C:\demo_etas\working-dir\src\ascet\main\ -cleanBuild all
           }
           "@
@@ -117,7 +118,7 @@ dev:
           pip install git-remote-s3
           if(!(Test-Path -Path "c:\demo_etas\working-dir\src" )) {
             Copy-Item -Path C:\App_Installers\tools\ETAS_Tools\aasf-etas-autosar-cp\repo -Destination c:\demo_etas\working-dir -Recurse
-            aws s3 cp c:\demo_etas\working-dir s3://$env:SOURCE_BUCKET_NAME/3.1.0 --recursive
+            aws s3 cp c:\demo_etas\working-dir s3://$env:SOURCE_BUCKET_NAME/$env:GITREPO_VERSION_NAME --recursive
             git config --global user.email "no-reply@etas.com"
             git config --global user.name "worker"
             $localRepoPath = "C:\demo_etas\working-dir"
@@ -125,7 +126,7 @@ dev:
             git init
             git add --all
             git commit -a -m  "Initial commit"
-            git remote add s3 "s3://$env:SOURCE_BUCKET_NAME/3.1.0-git/"
+            git remote add s3 "s3://$env:SOURCE_BUCKET_NAME/$env:GITREPO_VERSION_NAME-git/"
             git push s3 master
             New-Item -Path "C:\demo_etas\working-dir\.git\hooks\trigger.txt" -ItemType File -force
             & "C:\Program Files\7-zip\7z" a -tzip C:\demo_etas\working-dir\.git\hooks\trigger.zip -r C:\demo_etas\working-dir\.cb

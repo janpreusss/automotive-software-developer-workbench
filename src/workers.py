@@ -55,6 +55,7 @@ class Workers(Construct):
     def __init__(self, scope: Construct, id: str, 
                 env_name: str,
                 project_name: str,
+                gitrepo_version_name: str,
                 config: WorkersModel,
                 vpc: ec2.Vpc,
                 artifact: s3.Bucket):
@@ -197,6 +198,10 @@ class Workers(Construct):
             f"[Environment]::SetEnvironmentVariable('SOURCE_BUCKET_NAME', '{source_bucket_name}', 'Machine')")
         self.instance.user_data.add_commands(
             f"[Environment]::SetEnvironmentVariable('SOURCE_BUCKET_NAME', '{source_bucket_name}')")
+        self.instance.user_data.add_commands(
+            f"[Environment]::SetEnvironmentVariable('GITREPO_VERSION_NAME', '{gitrepo_version_name}', 'Machine')")
+        self.instance.user_data.add_commands(
+            f"[Environment]::SetEnvironmentVariable('GITREPO_VERSION_NAME', '{gitrepo_version_name}')")
 
         for cmd in config.user_data:
             self.instance.user_data.add_commands(cmd)

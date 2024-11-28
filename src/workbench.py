@@ -50,6 +50,7 @@ class Workbench(Construct):
     def __init__(self, scope: Construct, id: str, 
                  env_name: str, 
                  project_name: str,
+                 gitrepo_version_name: str,
                  config: WorkbenchModel,
                  vpc: ec2.Vpc,
                  artifact: s3.Bucket):
@@ -113,6 +114,7 @@ class Workbench(Construct):
         account_id = Stack.of(self).account
         region = Stack.of(self).region
         source_bucket_name = f'{project_name}-{env_name}-sourcecode-{account_id}-{region}'
+
         self.instance.user_data.add_commands(
             f"[Environment]::SetEnvironmentVariable('AWS_DEFAULT_REGION', '{region}', 'Machine')")
         self.instance.user_data.add_commands(
@@ -125,6 +127,10 @@ class Workbench(Construct):
             f"[Environment]::SetEnvironmentVariable('SOURCE_BUCKET_NAME', '{source_bucket_name}', 'Machine')")
         self.instance.user_data.add_commands(
             f"[Environment]::SetEnvironmentVariable('SOURCE_BUCKET_NAME', '{source_bucket_name}')")
+        self.instance.user_data.add_commands(
+            f"[Environment]::SetEnvironmentVariable('GITREPO_VERSION_NAME', '{gitrepo_version_name}', 'Machine')")
+        self.instance.user_data.add_commands(
+            f"[Environment]::SetEnvironmentVariable('GITREPO_VERSION_NAME', '{gitrepo_version_name}')")
         
         for cmd in config.user_data:
             self.instance.user_data.add_commands(cmd)
