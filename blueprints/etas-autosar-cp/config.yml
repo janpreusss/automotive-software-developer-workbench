@@ -32,7 +32,6 @@ dev:
           $toolPath = "c:\App_Installers\tools\rclone-v1.64.2-windows-amd64"
           [Environment]::SetEnvironmentVariable("Path", "$([Environment]::GetEnvironmentVariable('Path', 'Machine'));$toolPath", "Machine")
           aws configure set default.region $env:AWS_DEFAULT_REGION
-          #pip install git-remote-s3
 
           # Setup the working directory and initialize the ascet workspace
           $workingDir = "C:\demo_etas\working-dir"
@@ -115,7 +114,6 @@ dev:
           Set-ExecutionPolicy -ExecutionPolicy Unrestricted
           net user Administrator "Etas2024@" /active:Yes
           aws configure set default.region $env:AWS_DEFAULT_REGION
-          pip install git-remote-s3
           if(!(Test-Path -Path "c:\demo_etas\working-dir\src" )) {
             Copy-Item -Path C:\App_Installers\tools\ETAS_Tools\aasf-etas-autosar-cp\repo -Destination c:\demo_etas\working-dir -Recurse
             aws s3 cp c:\demo_etas\working-dir s3://$env:SOURCE_BUCKET_NAME/$env:GIT_VERSION --recursive
