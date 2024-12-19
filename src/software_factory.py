@@ -9,7 +9,8 @@ from aws_cdk import (
     aws_iam as iam,
     aws_s3 as s3,
     aws_ec2 as ec2,
-    aws_cloudtrail as ct
+    aws_cloudtrail as ct,
+    aws_ecr as ecr
 )
 from pydantic import BaseModel
 from typing import Optional, List
@@ -22,6 +23,8 @@ class VpcModel(BaseModel):
 class ActionModel(BaseModel):
     name: str
     buildspec: str
+    imageRepositoryArn: Optional[str] = None
+    imageTag: Optional[str] = None
     
 class StageModel(BaseModel):
     name: str
@@ -48,7 +51,8 @@ class SoftwareFactoryModel(BaseModel):
 class SoftwareFactoryStack(Stack):
   def __init__(self, scope: Construct, construct_id: str, 
         env_name: str, 
-        project_name: str, 
+        project_name: str,
+        git_version: str,
         config: SoftwareFactoryModel, 
         **kwargs) -> None:
     super().__init__(scope, construct_id, **kwargs)
@@ -110,6 +114,7 @@ class SoftwareFactoryStack(Stack):
         
     cb_role = iam.Role(self, 'CodeBuildRole', 
         assumed_by=iam.ServicePrincipal('codebuild.amazonaws.com'))
+    cb_role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name('AmazonEC2ContainerRegistryPullOnly'))
     self.artifact.grant_read_write(cb_role)
     self.source_code.grant_read_write(cb_role)
 
@@ -117,6 +122,7 @@ class SoftwareFactoryStack(Stack):
         workers = Workers(self, 'Workers', 
             env_name=env_name, 
             project_name=project_name,
+            git_version=git_version,
             config=config.workers,
             vpc=self.vpc,
             artifact=self.artifact)
@@ -129,12 +135,13 @@ class SoftwareFactoryStack(Stack):
 
     pipeline = cp.Pipeline(self, 'Pipeline', 
         pipeline_name=f'{project_name}-{env_name}',
+        pipeline_type=cp.PipelineType.V1,
         cross_account_keys=False,
         artifact_bucket=self.artifact)
         
     source_stage = pipeline.add_stage(stage_name='Source')
     source_artifact = cp.Artifact()
-    key = 'working-dir.zip'
+    key = 'trigger.zip'
 
     trail = ct.Trail(self, "CloudTrail", bucket=self.cloudtrail)
     trail.add_s3_event_selector([ct.S3EventSelector(
@@ -143,21 +150,31 @@ class SoftwareFactoryStack(Stack):
     )],
         read_write_type=ct.ReadWriteType.WRITE_ONLY
     )
-    source_stage.add_action(cp_actions.S3SourceAction(
+
+    source_action = cp_actions.S3SourceAction(
         action_name='S3Source',
         output=source_artifact,
         bucket=self.source_code,
         bucket_key=key,
-        trigger=cp_actions.S3Trigger.EVENTS))
+        trigger=cp_actions.S3Trigger.EVENTS,
+        variables_namespace='SourceVariables')
+
+    source_stage.add_action(source_action)
 
     for stage in config.stages:
         actions = []
         for action in stage.actions:
+
+            repository=None
+            if action.imageRepositoryArn:
+                repository=ecr.Repository.from_repository_arn(self, f'{action.name}Repo', action.imageRepositoryArn)
+
             kargs = {
                 'role': cb_role,
                 'environment': cb.BuildEnvironment(
                     compute_type=cb.ComputeType.SMALL,
-                    build_image=cb.LinuxBuildImage.AMAZON_LINUX_2_5),
+                    build_image=(cb.LinuxBuildImage.from_ecr_repository(repository, action.imageTag) if repository else cb.LinuxBuildImage.AMAZON_LINUX_2_5)
+                ),
                 'build_spec': cb.BuildSpec.from_source_filename(f'.cb/{action.buildspec}'),
                 'environment_variables': {
                     'SOURCE_CODE_BUCKET_NAME': cb.BuildEnvironmentVariable(
@@ -165,7 +182,9 @@ class SoftwareFactoryStack(Stack):
                     'ARTIFACT_BUCKET_NAME': cb.BuildEnvironmentVariable(
                         value=f'{self.artifact.bucket_name}'),
                     'WORKER_QUEUE_SECRET_REGION': cb.BuildEnvironmentVariable(
-                        value=region)}}
+                        value=region),
+                    'GIT_VERSION': cb.BuildEnvironmentVariable(
+                        value=f'{self.git_version}')}}
             
             if config.workers and hasattr(workers, 'broker'):
                 kargs.update({
@@ -182,6 +201,11 @@ class SoftwareFactoryStack(Stack):
             actions.append(cp_actions.CodeBuildAction(
                 action_name=action.name,
                 input=source_artifact,
+                environment_variables = {
+                    'VERSION_ID': cb.BuildEnvironmentVariable(
+                        value=source_action.variables.version_id),
+                    'EXECUTION_ID': cb.BuildEnvironmentVariable(
+                        value=cp.GlobalVariables.EXECUTION_ID)},
                 project=cb.PipelineProject(self, action.name, **kargs)))
             
         pipeline.add_stage(stage_name=stage.name, actions=actions)
@@ -190,6 +214,7 @@ class SoftwareFactoryStack(Stack):
         wb=Workbench(self, 'Workbench', 
             env_name=env_name, 
             project_name=project_name,
+            git_version=git_version,
             config=config.workbench,
             vpc=self.vpc,
             artifact=self.artifact)
