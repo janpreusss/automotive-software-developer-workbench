@@ -1,5 +1,5 @@
 project_name: project-1
-gitrepo_version_name: 3.1.0
+git_version: 4.0.0
 dev:
   software_factory:
     artifacts:
@@ -32,14 +32,14 @@ dev:
           $toolPath = "c:\App_Installers\tools\rclone-v1.64.2-windows-amd64"
           [Environment]::SetEnvironmentVariable("Path", "$([Environment]::GetEnvironmentVariable('Path', 'Machine'));$toolPath", "Machine")
           aws configure set default.region $env:AWS_DEFAULT_REGION
-          pip install git-remote-s3
+          #pip install git-remote-s3
 
           # Setup the working directory and initialize the ascet workspace
           $workingDir = "C:\demo_etas\working-dir"
           $hookDir = "$workingDir\.git\hooks"
 
           if (!(Test-Path -Path $workingDir)) {
-              git clone s3://$env:SOURCE_BUCKET_NAME/$env:GITREPO_VERSION_NAME-git/ $workingDir
+              git clone s3://$env:SOURCE_BUCKET_NAME/$env:GIT_VERSION-git/ $workingDir
               git config --global user.email "no-reply@etas.com"
               git config --global user.name "workbench"
               C:\ETAS\ASCET-DEVELOPER7.9\ascet.exe -nosplash -data C:\demo_etas\working-dir\ws -application org.eclipse.cdt.managedbuilder.core.headlessbuild -importAll C:\demo_etas\working-dir\src\ascet\main\ -cleanBuild all
@@ -118,7 +118,7 @@ dev:
           pip install git-remote-s3
           if(!(Test-Path -Path "c:\demo_etas\working-dir\src" )) {
             Copy-Item -Path C:\App_Installers\tools\ETAS_Tools\aasf-etas-autosar-cp\repo -Destination c:\demo_etas\working-dir -Recurse
-            aws s3 cp c:\demo_etas\working-dir s3://$env:SOURCE_BUCKET_NAME/$env:GITREPO_VERSION_NAME --recursive
+            aws s3 cp c:\demo_etas\working-dir s3://$env:SOURCE_BUCKET_NAME/$env:GIT_VERSION --recursive
             git config --global user.email "no-reply@etas.com"
             git config --global user.name "worker"
             $localRepoPath = "C:\demo_etas\working-dir"
@@ -126,9 +126,8 @@ dev:
             git init
             git add --all
             git commit -a -m  "Initial commit"
-            git remote add s3 "s3://$env:SOURCE_BUCKET_NAME/$env:GITREPO_VERSION_NAME-git/"
+            git remote add s3 "s3://$env:SOURCE_BUCKET_NAME/$env:GIT_VERSION-git/"
             git push s3 master
-            New-Item -Path "C:\demo_etas\working-dir\.git\hooks\trigger.txt" -ItemType File -force
             & "C:\Program Files\7-zip\7z" a -tzip C:\demo_etas\working-dir\.git\hooks\trigger.zip -r C:\demo_etas\working-dir\.cb
             aws s3 cp C:\demo_etas\working-dir\.git\hooks\trigger.zip s3://$env:SOURCE_BUCKET_NAME/trigger.zip
           }

@@ -10,7 +10,7 @@ from src.ami_factory import AmiFactoryStack
 
 class AppModel(BaseModel):
     project_name: str
-    gitrepo_version_name: str
+    git_version: str
     infra_repository_name: Optional[str] = None
     infra_repository_branch: Optional[str] = None
     dev: PipelineStageModel
@@ -45,7 +45,7 @@ if app.node.try_get_context('config') != None:
             SoftwareFactoryStack(app, "{}-dev-software-factory".format(config.project_name),
                 env_name,
                 config.project_name,
-                config.gitrepo_version_name,
+                config.git_version,
                 config.dev.software_factory,
                 env=env_dev)
 else:

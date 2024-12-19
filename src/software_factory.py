@@ -52,7 +52,7 @@ class SoftwareFactoryStack(Stack):
   def __init__(self, scope: Construct, construct_id: str, 
         env_name: str, 
         project_name: str,
-        gitrepo_version_name: str,
+        git_version: str,
         config: SoftwareFactoryModel, 
         **kwargs) -> None:
     super().__init__(scope, construct_id, **kwargs)
@@ -122,7 +122,7 @@ class SoftwareFactoryStack(Stack):
         workers = Workers(self, 'Workers', 
             env_name=env_name, 
             project_name=project_name,
-            gitrepo_version_name=gitrepo_version_name,
+            git_version=git_version,
             config=config.workers,
             vpc=self.vpc,
             artifact=self.artifact)
@@ -183,8 +183,8 @@ class SoftwareFactoryStack(Stack):
                         value=f'{self.artifact.bucket_name}'),
                     'WORKER_QUEUE_SECRET_REGION': cb.BuildEnvironmentVariable(
                         value=region),
-                    'GITREPO_VERSION_NAME': cb.BuildEnvironmentVariable(
-                        value=f'{self.gitrepo_version_name}')}}
+                    'GIT_VERSION': cb.BuildEnvironmentVariable(
+                        value=f'{self.git_version}')}}
             
             if config.workers and hasattr(workers, 'broker'):
                 kargs.update({
@@ -214,7 +214,7 @@ class SoftwareFactoryStack(Stack):
         wb=Workbench(self, 'Workbench', 
             env_name=env_name, 
             project_name=project_name,
-            gitrepo_version_name=gitrepo_version_name,
+            git_version=git_version,
             config=config.workbench,
             vpc=self.vpc,
             artifact=self.artifact)
