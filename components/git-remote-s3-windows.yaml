@@ -20,28 +20,7 @@ schemaVersion: 1.0
 phases:
   - name: build
     steps:
-      - name: python_env
-        channels:
-          - defaults
-        dependencies:
-          - python>~3.9
-          - pip
-          - numpy
-          - pip:
-            - some-pip-package
-
-      - name: UpdatePip
-        action: ExecutePowerShell
-        onFailure: Abort
-        timeoutSeconds: 600
-        inputs:
-          commands:
-            - |-
-              $ErrorActionPreference = 'Stop'
-              $ProgressPreference = 'SilentlyContinue'
-              python -m pip install --upgrade pip
-
-      - name: installgit-remote-s3
+      - name: Install-Git-Remote-s3
         action: ExecutePowerShell
         onFailure: Abort
         timeoutSeconds: 600
